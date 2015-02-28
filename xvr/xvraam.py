@@ -805,29 +805,44 @@ class AAMObject:
 			print "TEX coords ",self.maxtexcoords
 			if AAMShellCmd.interleavemode:
 				olist = []
+				if len(self.normals) == 0:
+					if len(self.groups) > 1:
+						print "cannot use normals in more than 1 group",len(self.groups),"for",self.name
+					else:
+						if len(self.groups) > 0:
+							self.normals = self.groups[0].normals
+						if self.normals is None:
+							self.normals = []
+				if len(self.normals) == 0:
+					ln = 0
+				else:
+					ln =      len(self.normals[0])
 				if len(self.texcoords) == 0:
 					vernor = []
 					for i in range(0,len(self.vertices)):
 						vernor.extend(self.vertices[i])
-						vernor.extend(self.normals[i])
-					data.append(["vernor",asvector(vernor)])                
-					l = (len(self.vertices[0]),len(self.normals[0]))
+						if len(self.normals) == 0:
+							vernor.extend((0,0,0,))
+						else:
+							vernor.extend(self.normals[i])
+					data.append(["vernor",asvector(vernor)])        
+					if len(self.vertices) > 0: 	
+						l = (len(self.vertices[0]),ln)
+					else:
+						l = (0,ln)
 					print l 
 					data.append(["vernor_size",l])
 				else:
 					vernortex =[]
-					if len(self.normals) == 0:
-						if len(self.groups) > 1:
-							print "cannot use normals in more than 1 group",len(self.groups),"for",self.name
-						else:
-							self.normals = self.groups[0].normals
-							print "using group normals",len(self.normals)
 					for i in range(0,len(self.vertices)):
 						vernortex.extend(self.vertices[i])
-						vernortex.extend(self.normals[i])
+						if len(self.normals) == 0:
+							vernortex.extend((0,0,0,))
+						else:
+							vernortex.extend(self.normals[i])
 						vernortex.extend(self.texcoords[i])
-					data.append(["vernortex",asvector(vernortex)])                
-					l = (len(self.vertices[0]),len(self.normals[0]),len(self.texcoords[0]))
+					data.append(["vernortex",asvector(vernortex)])
+					l = (len(self.vertices[0]),ln,len(self.texcoords[0]))
 					print l
 					data.append(["vernortex_size",l])
 				indices = []
