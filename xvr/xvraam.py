@@ -380,6 +380,7 @@ class AAMGroup:
 		self.colors = None
 		self.bbox = None
 	def gennormals(self):
+		"""Computes the normals of the given group"""
 		if self.gvertices is None:
 			return
 		self.normals = [(0,0,0) for i in range(0,len(self.gvertices))] # can be optimized?
@@ -387,9 +388,9 @@ class AAMGroup:
 		self.tnormals = [] 
 		for i in range(0,len(self.tris)):
 			v0,v1,v2 = [self.vertices[ivtx.v] for ivtx in self.tris[i]]
-			d1 = vsub(v1,v0) # TODO vsub
-			d2 = vsub(v2,v0) # TODO vsub
-			n = vcross(d1,d2) # TODO vcross
+			d1 = vsub(v1,v0) 
+			d2 = vsub(v2,v0) 
+			n = vcross(d1,d2)
 			n = vnormalize(n)
 			self.tnormals.append(n)
 		for i in range(0,len(self.tris)):
@@ -488,6 +489,7 @@ class AAMObject:
 		self.material = None # material object
 		self.mirror = False
 		self.user = None # UserProp
+		self.normals = []
 		self.id = 0 # object id
 		
 		self.xstat = None
@@ -544,8 +546,11 @@ class AAMObject:
 				x,y,z = self.vertices[i]
 				self.vertices[i] = [x,-z,y]
 	def gennormals(self):
+		"""computes the normals of all the groups inside"""
+		print self.id,self.name,"making normals of ",len(self.groups),"groups"
 		for g in self.groups:
 			g.gennormals()
+
 
 	def write(self, outfile, iframe,iobj,redux):
 		outfile.write("\tObj: %d %s\r\n\tPar: %d\r\n\t{\r\n" % (iobj,self.name,self.parent))
@@ -811,6 +816,12 @@ class AAMObject:
 					data.append(["vernor_size",l])
 				else:
 					vernortex =[]
+					if len(self.normals) == 0:
+						if len(self.groups) > 1:
+							print "cannot use normals in more than 1 group",len(self.groups),"for",self.name
+						else:
+							self.normals = self.groups[0].normals
+							print "using group normals",len(self.normals)
 					for i in range(0,len(self.vertices)):
 						vernortex.extend(self.vertices[i])
 						vernortex.extend(self.normals[i])
@@ -917,7 +928,9 @@ class AAMObject:
 				self.last = what[1]
 			elif what[0] == "Anim_Ctrl":
 				# TODO: if Y animation data follows
-				continue
+				if what[1] != "N":
+					print "unsupported Anim_Ctrl"
+					sys.exit(1)
 			# ScSam RtSam PsSam RtIPA
 			elif what[0] == "PsBez":
 				continue
@@ -1039,8 +1052,9 @@ class AAM:
         if infile:
             self.read(infile)
     def gennormals(self):
-        for iobj in range(0,len(self.objects)):
-            self.objects[iobj].gennormals()
+    	"""Computes the Normals of all the objects of the AAM file"""
+    	for x in self.objects:
+    		x.gennormals()
     def reorder(self,backward=False):
         for iobj in range(0,len(self.objects)):
             self.objects[iobj].reorder(backward)
@@ -1134,8 +1148,11 @@ class AAM:
 						obj.name = name
 						obj.parent = int(parser.readtoken("Par")[1])
 						if obj.parent != -1:
-							obj.parentobj = self.objects[obj.parent]
-							obj.parentobj.children.append(obj)
+							if len(self.objects) < obj.parent:
+								print "missing ",obj.parent, "in",self.objects
+							else:
+								obj.parentobj = self.objects[obj.parent]
+								obj.parentobj.children.append(obj)
 						else:
 							obj.parentobj = None
 						obj.parentboneid = obj.parent
@@ -1232,7 +1249,8 @@ class AAM:
 					obj.skinweights[iv] = [(oldboneid2boneid[oldbone],weight) for oldbone,weight in obj.skinweights.get(iv,[])]
 		objid2boneid[-1] = -1
 		for obj in self.objects:
-			obj.parentboneid = objid2boneid[obj.parent]
+			if len(objid2boneid) < obj.parent:
+				obj.parentboneid = objid2boneid[obj.parent]
 		if len(objid2boneid) > 0:
 			print "bonemap is now long ",len(objid2boneid)-1,"vs original ",len(self.objects)
 			print objid2boneid
@@ -1317,6 +1335,8 @@ class AAMShellCmd(cmd.Cmd):
 				for i in range(0,len(n)):
 					w = n[i]
 					n[i] = [-w[0],-w[1],-w[2]]
+			else:
+				print "missing normals in do_flipnormals"
 	def do_list(self,what):
 		if what == "":
 			print "list accepts: objs,mats,files"
