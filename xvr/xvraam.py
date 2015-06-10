@@ -35,6 +35,7 @@ class TriangleVertex:
 			self.t = []
 		else:
 			self.t = t
+		self.n = None
 		self.s = s
 	def asTuple(self): # UGLY
 		return (self.s,self.v,)+ tuple(self.t)
@@ -438,7 +439,7 @@ class AAMGroup:
 						while len(skinw) <= ivt:
 							skinw.append([])
 						skinw[ivt] = base.skinweights[vertexindex]  # TODO duplicate
-				qq.append(TriangleVertex(ivt))
+				qq.append(TriangleVertex(ivt,[ivt]))
 			idx.append(qq)
 		minx = None
 		maxx = None
@@ -449,13 +450,13 @@ class AAMGroup:
 			minx = numpy.minimum(v,minx)
 
 		self.bbox = BoundingBox(minx,maxx)
-
 		self.tris = idx
 		self.vertices = vtx
 		self.texcoords = tex
 		self.colors = col
 		self.skinweights = len(skinw) != 0 and skinw or None
 		self.gennormals()
+		print "restructured to",len(self.tris),"from",len(self.triangles)
 
 class AAMFrame:
 	def __init__(self):
@@ -1391,7 +1392,6 @@ class AAMShellCmd(cmd.Cmd):
 		cPickle.dump(self.aam,open(self.filename+".pickle","wb"))
 		print "pickled to ",self.filename+".pickle"
 	def do_saveobj(self,part):
-		# TODO specify output file
 		if part == "":
 			obj = self.aam.objects[0]
 			print "Exporting First object ",obj.name
@@ -1415,6 +1415,9 @@ class AAMShellCmd(cmd.Cmd):
 			self.saveobj(obj,outname)
 			self.saveobjrec(obj.children)		
 	def saveobj(self,obj,outname):
+		# NOTE: cannot store pivot or transforms in wavefront
+		# NOTE: vertex color sometimes supported by adding them to vertex
+		#
 		obj.gennormals()
 		obj.restructure()
 		f = open(outname,"w")
@@ -1428,24 +1431,35 @@ class AAMShellCmd(cmd.Cmd):
 		f.write("#material id is %d\n" % obj.mid)
 		f.write("#local2world is %s\n" % str(obj.local2world))
 		f.write("mtllib %s\n" % (os.path.split(self.filename)[1] + ".mtl"))
-		f.write("g %s\n" %obj.name)
+		f.write("o %s\n" %obj.name)
 		f.write("usemtl default\n")
-		for v in obj.vertices:
-			f.write("v %f %f %f\n" % (v[0],v[1],v[2]))
-		for v in obj.texcoords:
-			f.write("vt %f %f\n" % (v[0],v[1]))
-		print obj.tricount,len(obj.tris)
-		if True: # fix
-			for i in range(0,len(obj.tris)):
-				t = [q for q in obj.tris[i]]
-				tt = t #obj.tristex[i]
-				f.write("f %d/%d %d/%d %d/%d\n" % (t[0]+1,tt[0]+1,t[1]+1,tt[1]+1,t[2]+1,tt[2]+1))
-		else:
-			for t in obj.tris:
-				f.write("f %d %d %d\n" % (t[0]+1,t[1]+1,t[2]+1))
+
 		if len(obj.colors) != 0:
 			print "Warning: vertex colors not supported by Wavefront Object"
+		for v in obj.vertices:
+			f.write("v %f %f %f\n" % (v[0],v[1],v[2]))
+		for tv in obj.texcoords:
+			f.write("vt %f %f\n" % (tv[0],tv[1]))
+
+		for i,g in enumerate(obj.groups):
+			if len(obj.groups) > 1:
+				f.write("g group%d\n" % i)
+				# TODO add "s ..."			
+			for tv in g.tris:			
+				if len(tv[0].t) > 0:
+					if tv[0].n is not None:
+						f.write("f %d/%d/%d %d/%d/%d %d/%d/%d\n" % (tv[0].v+1,tv[0].t[0]+1,tv[0].n+1,tv[1].v+1,tv[1].t[0]+1,tv[1].n+1,tv[2].v+1,tv[2].t[0]+1,tv[2].n+1))
+					else:
+						f.write("f %d/%d %d/%d %d/%d\n" % (tv[0].v+1,tv[0].t[0]+1,tv[1].v+1,tv[1].t[0]+1,tv[2].v+1,tv[2].t[0]+1))
+				else:
+					if tv[0].n is not None:
+						f.write("f %d/%d %d/%d %d/%d\n" % (tv[0].v+1,tv[0].n+1,tv[1].v+1,tv[1].n+1,tv[2].v+1,tv[2].n+1))
+					else:
+						f.write("f %d %d %d\n" % (tv[0].v+1,tv[1].v+1,tv[2].v+1))
+
+		#http://www.martinreddy.net/gfx/3d/OBJ.spec
 		#http://local.wasp.uwa.edu.au/~pbourke/dataformats/mtl/
+
 		#usemtl material_name
 		#mtllib filename1 
 	def do_gendom(self,outline):
